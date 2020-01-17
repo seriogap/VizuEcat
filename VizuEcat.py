@@ -12,6 +12,7 @@ class EcatParser:
     def __init__(self, fileName):
         self.fileName = fileName
         self.sdoDictList = [] # creates an empty list
+        self.pdoList = []
 
     def parse(self):
         with open(self.fileName) as json_file:
@@ -26,8 +27,11 @@ class EcatParser:
                     continue
                 layers = source['layers']
 
+                if layers['frame']['frame.number'] == "10065":
+                    a = "d"
+
                 if not is_key_in_dict(layers, 'ecat'):
-                    continue
+                     continue
                 ecat_data = layers['ecat']
 
                 for k, ecat_frame in ecat_data.items():
@@ -40,18 +44,39 @@ class EcatParser:
                         continue
 
                     ecat_coe_tree = ecat_mailbox['ecat_mailbox.coe_tree']
-                    if not is_key_in_dict(ecat_coe_tree, 'ecat_mailbox.coe.sdoidx'):
+
+                    if not is_key_in_dict(ecat_coe_tree, 'ecat_mailbox.coe.type'):
                         continue
-
-                    idx = ecat_coe_tree['ecat_mailbox.coe.sdoidx']
-                    subidx = ecat_coe_tree['ecat_mailbox.coe.sdosub']
-
-                    if is_key_in_dict(ecat_coe_tree, 'ecat_mailbox.coe.dsoldata'):
-                        sdo_data = ecat_coe_tree['ecat_mailbox.coe.dsoldata']
-                    elif is_key_in_dict(ecat_coe_tree, 'ecat_mailbox.coe.sdodata'):
-                        sdo_data = ecat_coe_tree['ecat_mailbox.coe.sdodata']
                     else:
-                        sdo_data = 'No Data'
+                        ecat_coe_type = ecat_coe_tree['ecat_mailbox.coe.type']
+
+                    ecat_coe_type = ecat_coe_type.strip()
+
+                    idx = ""
+                    # handle the packet according to CoE Type
+                    if ecat_coe_type == "1":
+                        idx = "NA"
+                        subidx = "NA"
+                        sdo_data = ""
+                        sdo_type = "EMERGENCY"
+                    else:
+                        if ecat_coe_type == "2":
+                            sdo_type = "SDO Request"
+                        elif ecat_coe_type == "3":
+                            sdo_type = "SDO Response"
+
+                        if not is_key_in_dict(ecat_coe_tree, 'ecat_mailbox.coe.sdoidx'):
+                            continue
+
+                        idx = str(ecat_coe_tree['ecat_mailbox.coe.sdoidx']).replace("0x0000", "0x")
+                        subidx = str(ecat_coe_tree['ecat_mailbox.coe.sdosub']).replace("0x000000", "0x")
+
+                        if is_key_in_dict(ecat_coe_tree, 'ecat_mailbox.coe.dsoldata'):
+                            sdo_data = ecat_coe_tree['ecat_mailbox.coe.dsoldata']
+                        elif is_key_in_dict(ecat_coe_tree, 'ecat_mailbox.coe.sdodata'):
+                            sdo_data = ecat_coe_tree['ecat_mailbox.coe.sdodata']
+                        else:
+                            sdo_data = 'No Data'
 
                     # if ecat_frame['Header']['ecat.adp'] == '0x000003e9':
 
@@ -61,9 +86,10 @@ class EcatParser:
                     # Create dictionary with Frame data
                     mailBoxPacket = {}  # create empty dictionary
                     mailBoxPacket['No'] = layers['frame']['frame.number']
-                    mailBoxPacket['addr'] = ecat_frame['Header']['ecat.adp']
+                    mailBoxPacket['addr'] = str(ecat_frame['Header']['ecat.adp']).replace("0x0000", "0x")
                     mailBoxPacket['index'] = idx
                     mailBoxPacket['subIndex'] = subidx
+                    mailBoxPacket['sdoType'] = sdo_type
                     mailBoxPacket['data'] = sdo_data
 
                     #  Add dictionary to frame list
@@ -72,6 +98,8 @@ class EcatParser:
     def getSdoList(self):
         return self.sdoDictList
 
+    def getPdoList(self):
+        return self.pdoList
 
 if __name__ == "__main__":
     parser = EcatParser("trace1.json")
